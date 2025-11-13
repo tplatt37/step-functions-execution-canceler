@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for a test Step Functions state machine that simulates long-running executions'
+
+Resources:
+  # IAM Role for Step Functions execution
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+      Policies:
+        - PolicyName: StepFunctionsExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+
+  # Step Functions State Machine
+  LongRunningTestStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: LongRunningTestStateMachine
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: |
+        {
+          "Comment": "A test state machine that simulates long-running executions by sleeping for a configurable amount of time",
+          "StartAt": "LogStart",
+          "States": {
+            "LogStart": {
+              "Type": "Pass",
+              "Comment": "Log the start of execution",
+              "Result": "Execution started - entering wait state",
+              "ResultPath": "$.logMessage",
+              "Next": "WaitForSleepTime"
+            },
+            "WaitForSleepTime": {
+              "Type": "Wait",
+              "Comment": "Wait for the specified SleepTime (in seconds)",
+              "SecondsPath": "$.SleepTime",
+              "Next": "LogCompletion"
+            },
+            "LogCompletion": {
+              "Type": "Pass",
+              "Comment": "Log the completion of execution",
+              "Result": "Execution completed after waiting",
+              "ResultPath": "$.logMessage",
+              "Next": "Success"
+            },
+            "Success": {
+              "Type": "Succeed",
+              "Comment": "Execution completed successfully"
+            }
+          }
+        }
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+
+  # CloudWatch Log Group for State Machine
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/stepfunctions/LongRunningTestStateMachine
+      RetentionInDays: 7
+
+Outputs:
+  StateMachineArn:
+    Description: ARN of the created Step Functions state machine
+    Value: !GetAtt LongRunningTestStateMachine.Arn
+    Export:
+      Name: LongRunningTestStateMachineArn
+  
+  StateMachineName:
+    Description: Name of the created Step Functions state machine
+    Value: !GetAtt LongRunningTestStateMachine.Name
+    Export:
+      Name: LongRunningTestStateMachineName
+  
+  ExecutionRoleArn:
+    Description: ARN of the IAM role used by the state machine
+    Value: !GetAtt StepFunctionsExecutionRole.Arn
+  
+  LogGroupName:
+    Description: Name of the CloudWatch Log Group
+    Value: !Ref StateMachineLogGroup
+  
+  StartExecutionCommand:
+    Description: Example AWS CLI command to start an execution
+    Value: !Sub |
+      aws stepfunctions start-execution \
+        --state-machine-arn ${LongRunningTestStateMachine.Arn} \
+        --input '{"SleepTime": 3600}'
