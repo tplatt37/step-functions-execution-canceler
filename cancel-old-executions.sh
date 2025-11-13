@@ -117,10 +117,48 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
+# Validate the state machine ARN by attempting to describe it
+echo "Validating state machine ARN..."
+
+# Temporarily disable exit on error for this check
+set +e
+DESCRIBE_RESULT=$(aws stepfunctions describe-state-machine \
+    --state-machine-arn "$STATE_MACHINE_ARN" \
+    --output json 2>&1)
+DESCRIBE_EXIT_CODE=$?
+set -e
+
+if [ $DESCRIBE_EXIT_CODE -ne 0 ]; then
+    echo -e "${RED}Error: Invalid or inaccessible state machine ARN${NC}"
+    echo ""
+    # Check for common error types
+    if echo "$DESCRIBE_RESULT" | grep -q "StateMachineDoesNotExist"; then
+        echo "The state machine does not exist:"
+        echo "  ARN: $STATE_MACHINE_ARN"
+    elif echo "$DESCRIBE_RESULT" | grep -q "AccessDeniedException"; then
+        echo "Access denied to the state machine:"
+        echo "  ARN: $STATE_MACHINE_ARN"
+        echo "  Check your IAM permissions for states:DescribeStateMachine"
+    elif echo "$DESCRIBE_RESULT" | grep -q "InvalidArn"; then
+        echo "The provided ARN is invalid:"
+        echo "  ARN: $STATE_MACHINE_ARN"
+        echo "  Expected format: arn:aws:states:region:account-id:stateMachine:name"
+    else
+        echo "Failed to describe state machine:"
+        echo "$DESCRIBE_RESULT"
+    fi
+    exit 1
+fi
+
+STATE_MACHINE_NAME=$(echo "$DESCRIBE_RESULT" | jq -r '.name')
+echo -e "${GREEN}✓ State machine validated: $STATE_MACHINE_NAME${NC}"
+echo ""
+
 echo "=========================================="
 echo "Step Functions Execution Canceler"
 echo "=========================================="
 echo "State Machine ARN: $STATE_MACHINE_ARN"
+echo "State Machine Name: $STATE_MACHINE_NAME"
 echo "Batch Size: $BATCH_SIZE"
 echo "Age Threshold: $AGE_SECONDS seconds"
 echo "Sleep Between Pages: $SLEEP_SECONDS seconds"
