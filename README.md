@@ -97,7 +97,11 @@ done
 To see which executions would be stopped without actually stopping them:
 
 ```bash
-./cancel-old-executions.sh $STATE_MACHINE_ARN 50 1 2
+./cancel-old-executions.sh \
+  --state-machine-arn $STATE_MACHINE_ARN \
+  --batch-size 50 \
+  --age-hours 1 \
+  --sleep-seconds 2
 ```
 
 This will:
@@ -112,7 +116,12 @@ This will:
 To actually stop old executions:
 
 ```bash
-./cancel-old-executions.sh $STATE_MACHINE_ARN 50 1 2 --clean
+./cancel-old-executions.sh \
+  --state-machine-arn $STATE_MACHINE_ARN \
+  --batch-size 50 \
+  --age-hours 1 \
+  --sleep-seconds 2 \
+  --clean
 ```
 
 This will perform the same checks but actually stop the executions.
@@ -120,15 +129,15 @@ This will perform the same checks but actually stop the executions.
 ## Script Parameters
 
 ```
-./cancel-old-executions.sh <state-machine-arn> <batch-size> <age-hours> <sleep-seconds> [--clean]
+./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| state-machine-arn | Yes | The ARN of the Step Functions state machine |
-| batch-size | Yes | Number of executions to retrieve per page (recommend 50-100) |
-| age-hours | Yes | Age threshold in hours - executions older than this will be targeted |
-| sleep-seconds | Yes | Number of seconds to sleep between processing pages (helps avoid throttling) |
+| --state-machine-arn | Yes | The ARN of the Step Functions state machine |
+| --batch-size | Yes | Number of executions to retrieve per page (recommend 50-100) |
+| --age-hours | Yes | Age threshold in hours - executions older than this will be targeted |
+| --sleep-seconds | Yes | Number of seconds to sleep between processing pages (helps avoid throttling) |
 | --clean | No | Flag to actually stop executions (without this, it's a dry run) |
 
 ## Examples
@@ -137,20 +146,20 @@ This will perform the same checks but actually stop the executions.
 
 ```bash
 ./cancel-old-executions.sh \
-  arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
-  50 \
-  24 \
-  2
+  --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
+  --batch-size 50 \
+  --age-hours 24 \
+  --sleep-seconds 2
 ```
 
 ### Example 2: Stop executions older than 12 hours
 
 ```bash
 ./cancel-old-executions.sh \
-  arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
-  50 \
-  12 \
-  2 \
+  --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
+  --batch-size 50 \
+  --age-hours 12 \
+  --sleep-seconds 2 \
   --clean
 ```
 
@@ -158,10 +167,10 @@ This will perform the same checks but actually stop the executions.
 
 ```bash
 ./cancel-old-executions.sh \
-  arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
-  100 \
-  48 \
-  3 \
+  --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
+  --batch-size 100 \
+  --age-hours 48 \
+  --sleep-seconds 3 \
   --clean
 ```
 

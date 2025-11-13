@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to cancel old Step Functions executions
-# Usage: ./cancel-old-executions.sh <state-machine-arn> <batch-size> <age-hours> <sleep-seconds> [--clean]
+# Usage: ./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]
 
 set -e
 
@@ -13,36 +13,80 @@ NC='\033[0m' # No Color
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 <state-machine-arn> <batch-size> <age-hours> <sleep-seconds> [--clean]"
+    echo "Usage: $0 --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]"
     echo ""
     echo "Parameters:"
-    echo "  state-machine-arn : ARN of the Step Functions state machine (required)"
-    echo "  batch-size        : Number of executions to retrieve per page (required)"
-    echo "  age-hours         : Age threshold in hours - executions older than this will be targeted (required)"
-    echo "  sleep-seconds     : Number of seconds to sleep between processing pages (required)"
-    echo "  --clean           : Flag to actually stop the executions (optional, without this it's a dry run)"
+    echo "  --state-machine-arn <arn> : ARN of the Step Functions state machine (required)"
+    echo "  --batch-size <num>        : Number of executions to retrieve per page (required)"
+    echo "  --age-hours <num>         : Age threshold in hours - executions older than this will be targeted (required)"
+    echo "  --sleep-seconds <num>     : Number of seconds to sleep between processing pages (required)"
+    echo "  --clean                   : Flag to actually stop the executions (optional, without this it's a dry run)"
     echo ""
     echo "Example:"
-    echo "  $0 arn:aws:states:us-east-1:123456789:stateMachine:MyMachine 50 24 2"
-    echo "  $0 arn:aws:states:us-east-1:123456789:stateMachine:MyMachine 50 24 2 --clean"
+    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-hours 24 --sleep-seconds 2"
+    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-hours 24 --sleep-seconds 2 --clean"
     exit 1
 }
 
+# Initialize variables
+STATE_MACHINE_ARN=""
+BATCH_SIZE=""
+AGE_HOURS=""
+SLEEP_SECONDS=""
+CLEAN_MODE=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --state-machine-arn)
+            STATE_MACHINE_ARN="$2"
+            shift 2
+            ;;
+        --batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
+        --age-hours)
+            AGE_HOURS="$2"
+            shift 2
+            ;;
+        --sleep-seconds)
+            SLEEP_SECONDS="$2"
+            shift 2
+            ;;
+        --clean)
+            CLEAN_MODE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown parameter: $1${NC}"
+            usage
+            ;;
+    esac
+done
+
 # Check if required parameters are provided
-if [ $# -lt 4 ]; then
-    echo -e "${RED}Error: Missing required parameters${NC}"
+if [ -z "$STATE_MACHINE_ARN" ]; then
+    echo -e "${RED}Error: --state-machine-arn is required${NC}"
     usage
 fi
 
-STATE_MACHINE_ARN=$1
-BATCH_SIZE=$2
-AGE_HOURS=$3
-SLEEP_SECONDS=$4
-CLEAN_MODE=false
+if [ -z "$BATCH_SIZE" ]; then
+    echo -e "${RED}Error: --batch-size is required${NC}"
+    usage
+fi
 
-# Check for --clean flag
-if [ $# -eq 5 ] && [ "$5" == "--clean" ]; then
-    CLEAN_MODE=true
+if [ -z "$AGE_HOURS" ]; then
+    echo -e "${RED}Error: --age-hours is required${NC}"
+    usage
+fi
+
+if [ -z "$SLEEP_SECONDS" ]; then
+    echo -e "${RED}Error: --sleep-seconds is required${NC}"
+    usage
 fi
 
 # Validate numeric parameters
