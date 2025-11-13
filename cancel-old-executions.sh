@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to cancel old Step Functions executions
-# Usage: ./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]
+# Usage: ./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-seconds <num> --sleep-seconds <num> [--clean]
 
 set -e
 
@@ -13,25 +13,25 @@ NC='\033[0m' # No Color
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]"
+    echo "Usage: $0 --state-machine-arn <arn> --batch-size <num> --age-seconds <num> --sleep-seconds <num> [--clean]"
     echo ""
     echo "Parameters:"
     echo "  --state-machine-arn <arn> : ARN of the Step Functions state machine (required)"
     echo "  --batch-size <num>        : Number of executions to retrieve per page (required)"
-    echo "  --age-hours <num>         : Age threshold in hours - executions older than this will be targeted (required)"
+    echo "  --age-seconds <num>       : Age threshold in seconds - executions older than this will be targeted (required)"
     echo "  --sleep-seconds <num>     : Number of seconds to sleep between processing pages (required)"
     echo "  --clean                   : Flag to actually stop the executions (optional, without this it's a dry run)"
     echo ""
     echo "Example:"
-    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-hours 24 --sleep-seconds 2"
-    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-hours 24 --sleep-seconds 2 --clean"
+    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-seconds 300 --sleep-seconds 2"
+    echo "  $0 --state-machine-arn arn:aws:states:us-east-1:123456789:stateMachine:MyMachine --batch-size 50 --age-seconds 86400 --sleep-seconds 2 --clean"
     exit 1
 }
 
 # Initialize variables
 STATE_MACHINE_ARN=""
 BATCH_SIZE=""
-AGE_HOURS=""
+AGE_SECONDS=""
 SLEEP_SECONDS=""
 CLEAN_MODE=false
 
@@ -46,8 +46,8 @@ while [[ $# -gt 0 ]]; do
             BATCH_SIZE="$2"
             shift 2
             ;;
-        --age-hours)
-            AGE_HOURS="$2"
+        --age-seconds)
+            AGE_SECONDS="$2"
             shift 2
             ;;
         --sleep-seconds)
@@ -79,8 +79,8 @@ if [ -z "$BATCH_SIZE" ]; then
     usage
 fi
 
-if [ -z "$AGE_HOURS" ]; then
-    echo -e "${RED}Error: --age-hours is required${NC}"
+if [ -z "$AGE_SECONDS" ]; then
+    echo -e "${RED}Error: --age-seconds is required${NC}"
     usage
 fi
 
@@ -95,8 +95,8 @@ if ! [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-if ! [[ "$AGE_HOURS" =~ ^[0-9]+$ ]]; then
-    echo -e "${RED}Error: age-hours must be a positive integer${NC}"
+if ! [[ "$AGE_SECONDS" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Error: age-seconds must be a positive integer${NC}"
     exit 1
 fi
 
@@ -122,7 +122,7 @@ echo "Step Functions Execution Canceler"
 echo "=========================================="
 echo "State Machine ARN: $STATE_MACHINE_ARN"
 echo "Batch Size: $BATCH_SIZE"
-echo "Age Threshold: $AGE_HOURS hours"
+echo "Age Threshold: $AGE_SECONDS seconds"
 echo "Sleep Between Pages: $SLEEP_SECONDS seconds"
 if [ "$CLEAN_MODE" = true ]; then
     echo -e "Mode: ${RED}CLEAN MODE - Will stop executions${NC}"
@@ -132,10 +132,18 @@ fi
 echo "=========================================="
 echo ""
 
-# Calculate the timestamp threshold (current time - age hours)
+# Calculate the timestamp threshold (current time - age seconds)
 CURRENT_TIMESTAMP=$(date +%s)
-THRESHOLD_TIMESTAMP=$((CURRENT_TIMESTAMP - (AGE_HOURS * 3600)))
-THRESHOLD_DATE=$(date -r $THRESHOLD_TIMESTAMP +"%Y-%m-%d %H:%M:%S")
+THRESHOLD_TIMESTAMP=$((CURRENT_TIMESTAMP - AGE_SECONDS))
+
+# Detect OS for date command compatibility
+if date --version >/dev/null 2>&1; then
+    # GNU date (Linux)
+    THRESHOLD_DATE=$(date -d "@$THRESHOLD_TIMESTAMP" +"%Y-%m-%d %H:%M:%S")
+else
+    # BSD date (macOS)
+    THRESHOLD_DATE=$(date -r $THRESHOLD_TIMESTAMP +"%Y-%m-%d %H:%M:%S")
+fi
 
 echo "Current time: $(date +"%Y-%m-%d %H:%M:%S")"
 echo "Threshold time: $THRESHOLD_DATE"
@@ -200,7 +208,16 @@ while true; do
         
         # Convert start date to timestamp (AWS returns ISO 8601 format)
         # Extract just the timestamp portion (before the milliseconds)
-        START_TIMESTAMP=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$(echo $START_DATE | cut -d'.' -f1)" +%s 2>/dev/null || echo "0")
+        START_DATE_CLEANED=$(echo $START_DATE | cut -d'.' -f1)
+        
+        # Detect OS for date command compatibility
+        if date --version >/dev/null 2>&1; then
+            # GNU date (Linux)
+            START_TIMESTAMP=$(date -d "$START_DATE_CLEANED" +%s 2>/dev/null || echo "0")
+        else
+            # BSD date (macOS)
+            START_TIMESTAMP=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$START_DATE_CLEANED" +%s 2>/dev/null || echo "0")
+        fi
         
         if [ "$START_TIMESTAMP" -eq 0 ]; then
             echo -e "${YELLOW}Warning: Could not parse start date for execution${NC}"
@@ -223,7 +240,7 @@ while true; do
                 STOP_RESULT=$(aws stepfunctions stop-execution \
                     --execution-arn "$EXECUTION_ARN" \
                     --error "CancelledByScript" \
-                    --cause "Execution older than $AGE_HOURS hours" \
+                    --cause "Execution older than $AGE_SECONDS seconds" \
                     --output json 2>&1)
                 
                 if [ $? -eq 0 ]; then

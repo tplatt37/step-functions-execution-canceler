@@ -100,14 +100,14 @@ To see which executions would be stopped without actually stopping them:
 ./cancel-old-executions.sh \
   --state-machine-arn $STATE_MACHINE_ARN \
   --batch-size 50 \
-  --age-hours 1 \
+  --age-seconds 300 \
   --sleep-seconds 2
 ```
 
 This will:
 - Check the state machine at `$STATE_MACHINE_ARN`
 - Process 50 executions per page
-- Find executions older than 1 hour
+- Find executions older than 300 seconds (5 minutes)
 - Wait 2 seconds between pages
 - **NOT** actually stop any executions (dry run)
 
@@ -119,7 +119,7 @@ To actually stop old executions:
 ./cancel-old-executions.sh \
   --state-machine-arn $STATE_MACHINE_ARN \
   --batch-size 50 \
-  --age-hours 1 \
+  --age-seconds 300 \
   --sleep-seconds 2 \
   --clean
 ```
@@ -129,50 +129,57 @@ This will perform the same checks but actually stop the executions.
 ## Script Parameters
 
 ```
-./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-hours <num> --sleep-seconds <num> [--clean]
+./cancel-old-executions.sh --state-machine-arn <arn> --batch-size <num> --age-seconds <num> --sleep-seconds <num> [--clean]
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | --state-machine-arn | Yes | The ARN of the Step Functions state machine |
 | --batch-size | Yes | Number of executions to retrieve per page (recommend 50-100) |
-| --age-hours | Yes | Age threshold in hours - executions older than this will be targeted |
+| --age-seconds | Yes | Age threshold in seconds - executions older than this will be targeted |
 | --sleep-seconds | Yes | Number of seconds to sleep between processing pages (helps avoid throttling) |
 | --clean | No | Flag to actually stop executions (without this, it's a dry run) |
 
 ## Examples
 
-### Example 1: Find executions older than 24 hours (dry run)
+### Example 1: Find executions older than 5 minutes (dry run - good for testing)
 
 ```bash
 ./cancel-old-executions.sh \
   --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
   --batch-size 50 \
-  --age-hours 24 \
+  --age-seconds 300 \
   --sleep-seconds 2
 ```
 
-### Example 2: Stop executions older than 12 hours
+### Example 2: Stop executions older than 24 hours
 
 ```bash
 ./cancel-old-executions.sh \
   --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
   --batch-size 50 \
-  --age-hours 12 \
+  --age-seconds 86400 \
   --sleep-seconds 2 \
   --clean
 ```
 
-### Example 3: Process large number of executions with larger batch size
+### Example 3: Stop executions older than 12 hours with larger batch size
 
 ```bash
 ./cancel-old-executions.sh \
   --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine \
   --batch-size 100 \
-  --age-hours 48 \
+  --age-seconds 43200 \
   --sleep-seconds 3 \
   --clean
 ```
+
+**Common age-seconds values:**
+- 300 = 5 minutes (good for testing)
+- 3600 = 1 hour
+- 43200 = 12 hours
+- 86400 = 24 hours
+- 172800 = 48 hours
 
 ## Script Features
 
@@ -251,10 +258,11 @@ If you encounter throttling errors:
 ## Best Practices
 
 1. **Always run a dry run first** to verify which executions will be stopped
-2. **Start with conservative age thresholds** (e.g., 24-48 hours) to avoid stopping recent executions
-3. **Use appropriate batch sizes** - larger batches are faster but may cause throttling
-4. **Monitor the output** during execution to catch any issues
-5. **Set appropriate sleep intervals** - 2-3 seconds is usually sufficient for most use cases
+2. **Start with conservative age thresholds** (e.g., 86400+ seconds / 24+ hours) to avoid stopping recent executions
+3. **For testing, use shorter age thresholds** (e.g., 300 seconds / 5 minutes) to see the script in action
+4. **Use appropriate batch sizes** - larger batches are faster but may cause throttling
+5. **Monitor the output** during execution to catch any issues
+6. **Set appropriate sleep intervals** - 2-3 seconds is usually sufficient for most use cases
 
 ## License
 
