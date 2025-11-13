@@ -2,6 +2,11 @@
 
 This repository contains tools to manage and cancel old AWS Step Functions executions, along with a test state machine for validation.
 
+
+AI Disclaimer: GENERATED WITH CLINE and Anthropic Sonnet 4.5
+
+
+
 ## Contents
 
 1. **cancel-old-executions.sh** - Bash script to identify and optionally stop old running Step Functions executions
